@@ -1,4 +1,5 @@
 use anyhow::{bail, Result};
+use clap::{ArgAction, Parser};
 use full_moon::tokenizer::{Symbol, TokenType};
 use std::{env, fs, path::PathBuf};
 
@@ -9,12 +10,12 @@ const SEMICOLON: TokenType = TokenType::Symbol {
 const LEFT_BRACE: TokenType = TokenType::Symbol {
 	symbol: (Symbol::LeftBrace),
 };
-const LEFT_BRACKET: TokenType = TokenType::Symbol {
-	symbol: (Symbol::LeftBracket),
-};
-
 const RIGHT_BRACE: TokenType = TokenType::Symbol {
 	symbol: (Symbol::RightBrace),
+};
+
+const LEFT_BRACKET: TokenType = TokenType::Symbol {
+	symbol: (Symbol::LeftBracket),
 };
 const RIGHT_BRACKET: TokenType = TokenType::Symbol {
 	symbol: (Symbol::RightBracket),
@@ -82,14 +83,38 @@ fn format(file_path: &PathBuf) -> Result<()> {
 	Ok(())
 }
 
-fn main() -> Result<()> {
-	let args: Vec<String> = env::args().collect();
+fn format_dir(path: PathBuf, recursive: bool) -> Result<()> {
+	for entry in fs::read_dir(path)? {
+		let path = entry?.path();
 
-	if args.len() < 2 {
-		bail!("No file specified!")
+		if path.is_file() {
+			let file_name = path.file_name().unwrap().to_str().unwrap();
+
+			if file_name.ends_with(".lua") || file_name.ends_with(".luau") {
+				format(&path)?;
+			}
+		} else if recursive {
+			format_dir(path, recursive)?;
+		}
 	}
 
-	let mut path = PathBuf::from(&args[1]);
+	Ok(())
+}
+
+#[derive(Parser)]
+struct Args {
+	/// Path to the file or directory to format
+	path: String,
+
+	/// Format all files in the directory recursively
+	#[arg(short, long, action = ArgAction::SetTrue)]
+	recursive: bool,
+}
+
+fn main() -> Result<()> {
+	let args = Args::parse();
+
+	let mut path = PathBuf::from(&args.path);
 
 	if !path.is_absolute() {
 		path = env::current_dir()?.join(&path);
@@ -104,17 +129,5 @@ fn main() -> Result<()> {
 		return Ok(());
 	}
 
-	for entry in fs::read_dir(path)? {
-		let path = entry?.path();
-
-		if path.is_file() {
-			let file_name = path.file_name().unwrap().to_str().unwrap();
-
-			if file_name.ends_with(".lua") || file_name.ends_with(".luau") {
-				format(&path)?;
-			}
-		}
-	}
-
-	Ok(())
+	format_dir(path, args.recursive)
 }
