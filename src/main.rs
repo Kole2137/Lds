@@ -28,7 +28,7 @@ const END: TokenType = TokenType::Symbol {
 	symbol: (Symbol::End),
 };
 
-fn format(file_path: &PathBuf) -> Result<()> {
+fn format(file_path: &PathBuf, array: &bool) -> Result<()> {
 	let code = fs::read_to_string(file_path)?;
 	let tokens = full_moon::tokenizer::tokens(&code)?;
 
@@ -50,6 +50,10 @@ fn format(file_path: &PathBuf) -> Result<()> {
 
 		if token.token_type() == &SEMICOLON {
 			let line = token.start_position().line() - 1;
+
+			if depth != 0 && *array {
+				continue;
+			}
 
 			if code_lines[line].matches(';').count() == 1 {
 				if depth == 0 || fn_depth != 0 {
@@ -83,7 +87,7 @@ fn format(file_path: &PathBuf) -> Result<()> {
 	Ok(())
 }
 
-fn format_dir(path: PathBuf, recursive: bool) -> Result<()> {
+fn format_dir(path: PathBuf, recursive: bool, array: &bool) -> Result<()> {
 	for entry in fs::read_dir(path)? {
 		let path = entry?.path();
 
@@ -91,10 +95,10 @@ fn format_dir(path: PathBuf, recursive: bool) -> Result<()> {
 			let file_name = path.file_name().unwrap().to_str().unwrap();
 
 			if file_name.ends_with(".lua") || file_name.ends_with(".luau") {
-				format(&path)?;
+				format(&path, array)?;
 			}
 		} else if recursive {
-			format_dir(path, recursive)?;
+			format_dir(path, recursive, array)?;
 		}
 	}
 
@@ -109,6 +113,10 @@ struct Args {
 	/// Format all files in the directory recursively
 	#[arg(short, long, action = ArgAction::SetTrue)]
 	recursive: bool,
+
+	/// Keep semicolons at the end of array items
+	#[arg(short, long, action = ArgAction::SetTrue)]
+	array: bool,
 }
 
 fn main() -> Result<()> {
@@ -125,9 +133,9 @@ fn main() -> Result<()> {
 	}
 
 	if path.is_file() {
-		format(&path)?;
+		format(&path, &args.array)?;
 		return Ok(());
 	}
 
-	format_dir(path, args.recursive)
+	format_dir(path, args.recursive, &args.array)
 }
